@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
 class JobSerializer(serializers.Serializer):
-    id = serializers.CharField(source='_id', required=False)  
+    id = serializers.CharField(source='_id', required=False) 
+    uuid = serializers.UUIDField(required=False) 
     title = serializers.CharField()  
     company = serializers.CharField()
     location = serializers.CharField(required=False)

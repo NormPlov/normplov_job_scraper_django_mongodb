@@ -1,8 +1,10 @@
-from mongoengine import Document, StringField, DateTimeField, IntField, ListField, BooleanField, URLField
+import uuid
+from mongoengine import Document, StringField, DateTimeField, ListField, BooleanField, URLField
 
 class Job(Document):
     meta = {'collection': 'jobs'}  
 
+    uuid = StringField(default=lambda: str(uuid.uuid4()), unique=True, required=True)
     title = StringField(required=True) 
     company = StringField(required=True) 
     location = StringField(required=False)  

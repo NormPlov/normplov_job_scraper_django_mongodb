@@ -1,23 +1,6 @@
-"""
-URL configuration for job_scraper project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.urls import path
 from django.http import JsonResponse  
-from scraper.views import JobListView, JobScrapeView
-from django.contrib import admin
+from scraper.views.job_views import JobListView, JobScrapeView, UpdateJobView, DeleteJobView
 
 
 def root_view(request):
@@ -25,8 +8,10 @@ def root_view(request):
 
 urlpatterns = [
     path('', root_view, name='root'), 
-    path('api/v1/jobs/', JobListView.as_view(), name='job-list'),
+    path('api/v1/jobs', JobListView.as_view(), name='job-list'),
     path('api/v1/job-scraper', JobScrapeView.as_view(), name='job-scraper'),
+    path('api/v1/update/jobs/<str:uuid>', UpdateJobView.as_view(), name='update-job'),
+    path('api/v1/delete/jobs/<str:uuid>', DeleteJobView.as_view(), name='delete-job'),
 ]
 
 

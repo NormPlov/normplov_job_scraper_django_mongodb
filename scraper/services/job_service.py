@@ -1,6 +1,11 @@
 import requests
+import uuid
+
 from bs4 import BeautifulSoup
 from scraper.models.job import Job
+from mongoengine.errors import DoesNotExist
+from mongoengine.queryset.visitor import Q
+from scraper.utils.pagination import paginate_query
 
 class JobService:
     @staticmethod
@@ -13,7 +18,6 @@ class JobService:
 
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Extract the job details
         title = soup.find('h1', class_='title').text.strip()
         company = soup.find('a', class_='sub-title').text.strip()
         location = soup.find('span', text='Location:').find_next_sibling('span').text.strip() if soup.find('span', text='Location:') else None
@@ -24,7 +28,6 @@ class JobService:
         salary = soup.find('span', text='Salary:').find_next_sibling('span').text.strip() if soup.find('span', text='Salary:') else None
         description = soup.find('div', class_='ql-editor').text.strip() if soup.find('div', class_='ql-editor') else None
 
-        # Extract requirements and responsibilities
         requirements = [
             li.text.strip()
             for li in soup.select('.job-detail-req-mobile li')
@@ -34,12 +37,12 @@ class JobService:
             for li in soup.select('.job-detail-req li')
         ]
 
-        # Extract email and phone
         email = soup.find('a', href=lambda href: href and "mailto:" in href)
         email = email.text.strip() if email else None
-        phone = None  # Add logic to extract phone if available
+        phone = None  
 
         job_data = {
+            "uuid": str(uuid.uuid4()),
             "title": title,
             "company": company,
             "location": location,
@@ -64,6 +67,67 @@ class JobService:
     @staticmethod
     def create_job(data):
         """Create a new job."""
+        # Check if a job with the same UUID already exists
+        existing_job = Job.objects(uuid=data["uuid"]).first()
+        if existing_job:
+            print(f"Job with UUID {data['uuid']} already exists. Skipping creation.")
+            return existing_job
+
+        # Create and save the new job
         job = Job(**data)
         job.save()
         return job
+    
+
+    @staticmethod
+    def update_job(uuid, update_data):
+    
+        try:
+            job = Job.objects.get(uuid=uuid)
+            
+            for field, value in update_data.items():
+                if hasattr(job, field): 
+                    setattr(job, field, value)
+            
+            # Save changes
+            job.save()
+            return job
+        except DoesNotExist:
+            raise ValueError(f"Job with UUID {uuid} does not exist.")
+        
+
+
+    @staticmethod
+    def get_jobs(filters, sort_by="-posted_at", page=1, page_size=10):
+
+        query = Q()
+
+        if "title" in filters and filters["title"]:
+            query &= Q(title__icontains=filters["title"])
+        if "company" in filters and filters["company"]:
+            query &= Q(company__icontains=filters["company"])
+        if "location" in filters and filters["location"]:
+            query &= Q(location__icontains=filters["location"])
+        if "is_active" in filters and filters["is_active"] is not None:
+            query &= Q(is_active=filters["is_active"])
+
+        queryset = Job.objects.filter(query)
+
+        if sort_by:
+            queryset = queryset.order_by(sort_by)
+
+        result = paginate_query(queryset, page, page_size)
+
+        return result
+    
+
+    @staticmethod
+    def delete_job(uuid):
+        
+        job = Job.objects(uuid=uuid).first()
+        if not job:
+            raise ValueError(f"No job found with UUID: {uuid}")
+        
+        job.delete()
+        return {"uuid": uuid, "message": "Job deleted successfully"}
+
