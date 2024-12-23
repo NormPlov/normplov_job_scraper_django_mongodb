@@ -1,17 +1,18 @@
 import requests
 import uuid
 import requests
+import random
+import time
+import requests
 
 from bs4 import BeautifulSoup
 from scraper.models.job import Job
+from scraper.utils.url import validate_url
 from mongoengine.errors import DoesNotExist
 from mongoengine.queryset.visitor import Q
 from scraper.utils.pagination import paginate_query
-from rest_framework.renderers import JSONRenderer
 from scraper.serializers.job_serializer import JobSerializer
-import requests
-from bs4 import BeautifulSoup
-import uuid
+from datetime import datetime
 
 class JobService:
 
@@ -31,40 +32,66 @@ class JobService:
     def scrape_jobs(website_url):
         """Scrape job data from the provided URL and save it to the database."""
         try:
-            response = requests.get(website_url)
-            if response.status_code != 200:
-                raise ValueError(f"Failed to fetch data from {website_url}. Status code: {response.status_code}")
+            headers = [
+                {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'},
+                {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+            ]
+            selected_header = random.choice(headers)
+            
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    time.sleep(random.uniform(1, 3))
+                    response = requests.get(website_url, headers=selected_header, timeout=10)
+                    if response.status_code == 200:
+                        break
+                    print(f"[Retry {attempt + 1}] Failed to fetch URL. Status: {response.status_code}")
+                except requests.RequestException as e:
+                    print(f"[Retry {attempt + 1}] Error: {e}")
+            else:
+                raise ValueError(f"Failed to fetch data from {website_url} after {retries} attempts.")
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Extract fields with default fallback to None if not found
-            title = soup.find('h1', class_='title').text.strip() if soup.find('h1', class_='title') else None
-            company = soup.find('a', class_='sub-title').text.strip() if soup.find('a', class_='sub-title') else None
-            logo = soup.find('div', class_='thumb').find('img')['src'] if soup.find('div', class_='thumb') else None
+            def extract_text(selector, key):
+                element = soup.select_one(selector)
+                return element.text.strip() if element else None
+
+            title = extract_text('h1.title', 'Title')
+            company = extract_text('a.sub-title', 'Company')
+            logo_tag = soup.find('div', class_='thumb')
+            logo = validate_url(logo_tag.find('img')['src'] if logo_tag and logo_tag.find('img') else None)
+
             facebook = soup.find('a', href=lambda href: href and "facebook.com" in (href or ""))
-            facebook_url = facebook['href'] if facebook else None
-            location = soup.find('li', class_='clearfix en', text=lambda t: "Location:" in (t or "")).find_next('span').text.strip() \
-                if soup.find('li', class_='clearfix en', text=lambda t: "Location:" in (t or "")) else None
-            job_type = soup.find('li', class_='clearfix en', text=lambda t: "Type :" in (t or "")).find_next('span').text.strip() \
-                if soup.find('li', class_='clearfix en', text=lambda t: "Type :" in (t or "")) else None
-            schedule = soup.find('li', class_='clearfix en', text=lambda t: "Schedule:" in (t or "")).find_next('span').text.strip() \
-                if soup.find('li', class_='clearfix en', text=lambda t: "Schedule:" in (t or "")) else None
-            salary = soup.find('li', class_='clearfix en', text=lambda t: "Salary:" in (t or "")).find_next('span').text.strip() \
-                if soup.find('li', class_='clearfix en', text=lambda t: "Salary:" in (t or "")) else None
+            facebook_url = validate_url(facebook['href'] if facebook else None)
 
-            description = soup.find('div', class_='ql-editor').text.strip() if soup.find('div', class_='ql-editor') else None
-            requirements = [li.text.strip() for li in soup.select('.job-detail-req-mobile li')]
-            responsibilities = [li.text.strip() for li in soup.select('.job-detail-req li')]
+            location = extract_text('li.clearfix.en:-soup-contains("Location:") span', 'Location')
+            job_type = extract_text('li.clearfix.en:-soup-contains("Type :") span', 'Job Type')
+            schedule = extract_text('li.clearfix.en:-soup-contains("Schedule:") span', 'Schedule')
+            salary = extract_text('li.clearfix.en:-soup-contains("Salary:") span', 'Salary')
+            category = extract_text('li.clearfix.en:-soup-contains("Category:") span', 'Category')
+            description = extract_text('div.ql-editor', 'Description')
 
-            email = soup.find('a', href=lambda href: href and "mailto:" in (href or ""))
-            email = email['href'].split(':')[1] if email else None
-            phone = None
+            requirements = [li.text.strip() for li in soup.select('.job-detail-req-mobile li')] or None
+            responsibilities = [li.text.strip() for li in soup.select('.job-detail-req li')] or None
+            benefits = [li.text.strip() for li in soup.select('.job-benefit li')] or None
 
-            # Create job data dictionary
+            phone_elements = soup.select('strong:contains("Phone") + ul.no-list li a[href^="tel:"]')
+            phones = [phone['href'].replace('tel:', '').strip() for phone in phone_elements if phone.get('href')]
+
+            website_elements = soup.select('strong:contains("Website") + ul.no-list li a[href^="http"]')
+            websites = [validate_url(link['href']) for link in website_elements if link.get('href')]
+
+            email_tag = soup.find('a', href=lambda href: href and "mailto:" in (href or ""))
+            email = email_tag['href'].split(':')[1] if email_tag else None
+
+            posted_at = datetime.now() 
+            closing_date = None  
+
             job_data = {
                 "uuid": str(uuid.uuid4()),
-                "title": title,
-                "company": company,
+                "title": title or "No title provided",
+                "company": company or "No company provided",
                 "logo": logo,
                 "facebook_url": facebook_url,
                 "location": location,
@@ -72,22 +99,27 @@ class JobService:
                 "schedule": schedule,
                 "salary": salary,
                 "description": description,
+                "category": category,
                 "requirements": requirements,
                 "responsibilities": responsibilities,
+                "benefits": benefits,
                 "email": email,
-                "phone": phone,
+                "phone": phones,
+                "website": website_url,
+                "posted_at": posted_at,
+                "closing_date": closing_date,
                 "is_active": True,
             }
 
-            # Save the job to the database
             job = Job(**job_data)
             job.save()
 
-            # Serialize the saved job
             return JobSerializer(job).data
+
         except Exception as e:
-            print(f"Error occurred while scraping jobs: {e}")
-            raise ValueError("An error occurred while scraping jobs")
+            print(f"[Error] Failed to scrape job: {e}")
+            raise ValueError(f"An error occurred while scraping the job: {e}")
+        
 
     @staticmethod
     def create_job(data):

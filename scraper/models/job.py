@@ -21,6 +21,6 @@ class Job(Document):
     responsibilities = ListField(StringField(), required=False)  
     benefits = ListField(StringField(), required=False)  
     email = StringField(required=False)  
-    phone = StringField(required=False) 
+    phone = ListField(StringField())
     website = URLField(required=False)  
     is_active = BooleanField(default=True)  
