@@ -108,9 +108,6 @@ class JobService:
 
     @staticmethod
     def extract_job_details(soup, url):
-        """
-        Extract job details from the BeautifulSoup object based on the source (Bongthom or NEA).
-        """
         def extract(selector, attribute=None):
             element = soup.select_one(selector)
             if element:
@@ -571,83 +568,6 @@ class JobService:
         except Exception as e:
             logging.error(f"Failed to scrape jobs from {url}: {e}")
             raise
-        
-
-    # Login and Refresh Background Process
-    access_token = None
-    refresh_token = None
-    token_expiry = None
-
-    @staticmethod
-    def get_admin_token():
-        try:
-            if JobService.access_token and JobService.token_expiry and datetime.now() < JobService.token_expiry:
-                print("Access token is valid.")  
-                return JobService.access_token 
-
-            if JobService.refresh_token:
-                print("Access token expired, attempting to refresh.")  
-                return JobService.refresh_access_token()
-
-            return JobService.perform_login()
-
-        except Exception as e:
-            raise Exception(f"Error fetching admin token: {e}")
-
-    @staticmethod
-    def perform_login():
-        login_url = "http://136.228.158.126:3300/api/v1/auth/login"
-        login_data = {
-            "email": "admin@gmail.com",
-            "password": "Admin@123",
-        }
-
-        response = requests.post(login_url, json=login_data)
-
-        if response.status_code != 200:
-            raise Exception(f"Login failed. Status code: {response.status_code}, Response: {response.text}")
-
-        login_response = response.json()
-        access_token = login_response.get("payload", {}).get("access_token")
-        refresh_token = login_response.get("payload", {}).get("refresh_token")
-        expiry_time = login_response.get("payload", {}).get("expiry_time", 180)  
-
-        if not access_token or not refresh_token:
-            raise Exception("Access token or refresh token not found in the response.")
-
-        JobService.access_token = access_token
-        JobService.refresh_token = refresh_token
-        JobService.token_expiry = datetime.now() + timedelta(seconds=expiry_time)
-
-        print(f"Access token generated. Expiry time set to: {JobService.token_expiry}")  # Debugging line
-        return access_token
-
-    @staticmethod
-    def refresh_access_token():
-        refresh_url = "http://136.228.158.126:3300/api/v1/auth/refresh"
-        refresh_data = {
-            "refresh_token": JobService.refresh_access_token,
-        }
-
-        response = requests.post(refresh_url, json=refresh_data)
-
-        if response.status_code != 200:
-            raise Exception(f"Failed to refresh access token. Status code: {response.status_code}, Response: {response.text}")
-
-        refresh_response = response.json()
-        access_token = refresh_response.get("payload", {}).get("access_token")
-        refresh_access_token = refresh_response.get("payload", {}).get("refresh_token")
-        expiry_time = refresh_response.get("payload", {}).get("expiry_time", 180)  
-
-        if not access_token:
-            raise Exception("Access token not found in the refresh response.")
-
-        JobService.access_token = access_token
-        JobService.refresh_token = refresh_token
-        JobService.token_expiry = datetime.now() + timedelta(seconds=expiry_time)
-
-        print(f"Access token refreshed. New expiry time: {JobService.token_expiry}")  
-        return access_token
 
 
     @staticmethod
@@ -689,11 +609,8 @@ class JobService:
             if job.logo:
                 files["logo"] = ("logo.png", requests.get(job.logo).content)
 
-            token = JobService.get_admin_token()
-            headers = {"Authorization": f"Bearer {token}"}
-
             fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
-            response = requests.post(fastapi_url, data=data, files=files, headers=headers)
+            response = requests.post(fastapi_url, data=data, files=files)
 
             if response.status_code != 201:
                 raise Exception(f"Failed to update job in FastAPI. Response: {response.text}")
