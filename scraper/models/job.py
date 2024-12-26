@@ -1,10 +1,12 @@
 import uuid
+
+from mongoengine import signals
 from mongoengine import Document, StringField, DateTimeField, ListField, BooleanField, URLField
 
 class Job(Document):
     meta = {'collection': 'jobs'}  
 
-    uuid = StringField(default=lambda: str(uuid.uuid4()), unique=True, required=True)
+    uuid = StringField(unique=True, required=True)
     title = StringField(required=True) 
     company = StringField(required=True) 
     logo = URLField(required=False)  
@@ -23,4 +25,13 @@ class Job(Document):
     email = StringField(required=False)  
     phone = ListField(StringField())
     website = URLField(required=False)  
-    is_active = BooleanField(default=True)  
+    is_active = BooleanField(default=True) 
+    is_scraped = BooleanField(default=True) 
+    is_updated = BooleanField(default=False) 
+
+    @classmethod
+    def pre_save(cls, sender, document, **kwargs):
+            if not document.uuid:
+                document.uuid = str(uuid.uuid4())
+
+signals.pre_save.connect(Job.pre_save, sender=Job)

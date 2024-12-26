@@ -74,7 +74,7 @@ class JobListView(APIView):
 class JobScrapeView(APIView):
     def post(self, request):
         try:
-            website_url = request.data.get('website_url')
+            website_url = request.data.get('url')
 
             if not website_url:
                 return BaseResponse(

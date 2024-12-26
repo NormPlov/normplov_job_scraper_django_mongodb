@@ -18,6 +18,8 @@ class JobSerializer(serializers.Serializer):
     phone = serializers.CharField(required=False)
     website = serializers.URLField(required=False)
     is_active = serializers.BooleanField(default=True)
+    is_scraped = serializers.BooleanField(default=True)
+    is_updated = serializers.BooleanField(default=False)
     logo = serializers.URLField(required=False)  
     facebook_url = serializers.URLField(required=False)  
     schedule = serializers.CharField(required=False) 
