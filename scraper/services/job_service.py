@@ -582,7 +582,7 @@ class JobService:
 
 
     @staticmethod
-    def update_job(uuid, update_data):
+    def update_job(uuid, update_data, token):
         try:
             job = Job.objects.get(uuid=uuid)
 
@@ -616,12 +616,18 @@ class JobService:
                 "is_scraped": getattr(job, "is_scraped", True),
             }
 
+            headers = {"Authorization": token}  
+
             files = {}
             if job.logo:
-                files["logo"] = ("logo.png", requests.get(job.logo).content)
+                try:
+                    logo_content = requests.get(job.logo, timeout=10).content
+                    files["logo"] = ("logo.png", logo_content)
+                except requests.RequestException as e:
+                    raise Exception(f"Error fetching logo: {e}")
 
             fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
-            response = requests.post(fastapi_url, data=data, files=files)
+            response = requests.post(fastapi_url, data=data, files=files, headers=headers)
 
             if response.status_code != 201:
                 raise Exception(f"Failed to update job in FastAPI. Response: {response.text}")
@@ -630,10 +636,10 @@ class JobService:
 
         except Job.DoesNotExist:
             raise ValueError(f"Job with UUID {uuid} does not exist.")
+
         except Exception as e:
             raise Exception(f"Error updating job: {e}")
-
-
+        
     @staticmethod
     def get_jobs(filters, sort_by="-posted_at", page=1, page_size=10):
         query = Q()

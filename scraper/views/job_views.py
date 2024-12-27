@@ -102,9 +102,17 @@ class JobScrapeView(APIView):
 class UpdateJobView(APIView):
     def patch(self, request, uuid):
         update_data = request.data
+        token = request.headers.get("Authorization") 
+
+        if not token:
+            return BaseResponse(
+                status=status.HTTP_401_UNAUTHORIZED,
+                message="Authorization token is required.",
+                payload={"error": "Missing Authorization header."}
+            )
 
         try:
-            updated_job = JobService.update_job(uuid, update_data)
+            updated_job = JobService.update_job(uuid, update_data, token)
 
             job_dict = updated_job.to_mongo().to_dict()
             job_dict["_id"] = str(job_dict["_id"])
@@ -129,7 +137,6 @@ class UpdateJobView(APIView):
                 payload={"error": str(e)}
             )
 
-        
 
 class DeleteJobView(APIView):
 
