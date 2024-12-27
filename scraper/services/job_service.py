@@ -75,10 +75,32 @@ class JobService:
                 print(f"[Retry {attempt + 1}] Error fetching {url}: {e}")
         return None  
 
+    # @staticmethod
+    # def scrape_with_selenium(url):
+    #     service = Service(ChromeDriverManager().install())
+    #     driver = webdriver.Chrome(service=service)
+
+    #     try:
+    #         driver.get(url)
+    #         WebDriverWait(driver, 10).until(
+    #             EC.presence_of_element_located((By.TAG_NAME, "body"))  # Wait for the page to load
+    #         )
+    #         html_content = driver.page_source
+    #         return BeautifulSoup(html_content, 'html.parser')
+    #     except Exception as e:
+    #         print(f"[Error] Selenium scraping failed for {url}: {e}")
+    #         return None
+    #     finally:
+    #         driver.quit()
+
     @staticmethod
     def scrape_with_selenium(url):
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service)
+        # Set the path explicitly to /usr/bin/chromedriver
+        service = Service('/usr/bin/chromedriver')
+        options = webdriver.ChromeOptions()
+        options.binary_location = '/usr/bin/chromium-browser'
+
+        driver = webdriver.Chrome(service=service, options=options)
 
         try:
             driver.get(url)
