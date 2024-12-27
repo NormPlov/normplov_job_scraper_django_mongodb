@@ -95,17 +95,22 @@ class JobService:
 
     @staticmethod
     def scrape_with_selenium(url):
-        # Set the path explicitly to /usr/bin/chromedriver
         service = Service('/usr/bin/chromedriver')
+
         options = webdriver.ChromeOptions()
         options.binary_location = '/usr/bin/chromium-browser'
+        options.add_argument('--headless')  
+        options.add_argument('--no-sandbox') 
+        options.add_argument('--disable-dev-shm-usage') 
+        options.add_argument('--disable-gpu') 
+        options.add_argument('--window-size=1920x1080')  
 
         driver = webdriver.Chrome(service=service, options=options)
 
         try:
             driver.get(url)
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))  # Wait for the page to load
+                EC.presence_of_element_located((By.TAG_NAME, "body")) 
             )
             html_content = driver.page_source
             return BeautifulSoup(html_content, 'html.parser')
