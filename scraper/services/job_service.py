@@ -24,6 +24,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urljoin
 from pyppeteer import launch
+from django.core.exceptions import ValidationError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,23 +76,6 @@ class JobService:
                 print(f"[Retry {attempt + 1}] Error fetching {url}: {e}")
         return None  
 
-    # @staticmethod
-    # def scrape_with_selenium(url):
-    #     service = Service(ChromeDriverManager().install())
-    #     driver = webdriver.Chrome(service=service)
-
-    #     try:
-    #         driver.get(url)
-    #         WebDriverWait(driver, 10).until(
-    #             EC.presence_of_element_located((By.TAG_NAME, "body"))  # Wait for the page to load
-    #         )
-    #         html_content = driver.page_source
-    #         return BeautifulSoup(html_content, 'html.parser')
-    #     except Exception as e:
-    #         print(f"[Error] Selenium scraping failed for {url}: {e}")
-    #         return None
-    #     finally:
-    #         driver.quit()
 
     @staticmethod
     def scrape_with_selenium(url):
