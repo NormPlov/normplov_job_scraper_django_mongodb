@@ -1,2 +1,3 @@
 # Ignore docker-compose file
 docker-compose.yml
+Dockerfile
