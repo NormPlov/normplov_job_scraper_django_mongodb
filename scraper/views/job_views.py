@@ -7,7 +7,8 @@ from ..serializers.job_serializer import JobSerializer
 from scraper.services.job_service import JobService 
 from rest_framework import status 
 from scraper.utils.response import BaseResponse
-from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_201_CREATED, HTTP_500_INTERNAL_SERVER_ERROR
+from django.http import JsonResponse
+import asyncio
 
 
 logger = logging.getLogger(__name__)
@@ -77,27 +78,49 @@ class JobScrapeView(APIView):
             website_url = request.data.get('url')
 
             if not website_url:
-                return BaseResponse(
-                    status=HTTP_400_BAD_REQUEST,
-                    message="Validation error",
-                    payload={"error": "The 'website_url' field is required."}
+                return Response(
+                    {
+                        "status": status.HTTP_400_BAD_REQUEST,
+                        "message": "Validation error",
+                        "payload": {"error": "The 'website_url' field is required."}
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            scraped_jobs = JobService.scrape_jobs(website_url)
+            # Call the scraping service and get the result
+            scraped_jobs = JobService.scrape_with_selenium(website_url, request)
 
-            return BaseResponse(
-                status=HTTP_201_CREATED,
-                message="Jobs scraped successfully!",
-                payload={"jobs": scraped_jobs}
+            if scraped_jobs.get('status') == 'error':
+                # If the scraping failed, return the error message
+                return Response(
+                    {
+                        "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        "message": "An error occurred while scraping jobs",
+                        "payload": {"error": scraped_jobs.get('message')}
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # If successful, return the scraped data
+            return Response(
+                {
+                    "status": status.HTTP_201_CREATED,
+                    "message": "Jobs scraped successfully!",
+                    "payload": {"jobs": scraped_jobs.get('data')}
+                },
+                status=status.HTTP_201_CREATED
             )
 
         except Exception as e:
-            return BaseResponse(
-                status=HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An error occurred while scraping jobs",
-                payload={"error": str(e)}
+            return Response(
+                {
+                    "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "message": "An error occurred while scraping jobs",
+                    "payload": {"error": str(e)}
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+
 
 class UpdateJobView(APIView):
     def patch(self, request, uuid):

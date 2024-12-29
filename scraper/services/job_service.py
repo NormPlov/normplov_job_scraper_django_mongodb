@@ -56,6 +56,7 @@ class JobService:
             print(f"[Warning] Failed to read robots.txt for {url}: {e}")
             return True
 
+
     @staticmethod
     def scrape_with_beautifulsoup(url):
         headers = [
@@ -77,32 +78,74 @@ class JobService:
         return None  
 
 
+    # @staticmethod
+    # def scrape_with_selenium(url):
+    #     service = Service('/usr/bin/chromedriver')
+
+    #     options = webdriver.ChromeOptions()
+    #     options.binary_location = '/usr/bin/chromium-browser'
+    #     options.add_argument('--headless')  
+    #     options.add_argument('--no-sandbox') 
+    #     options.add_argument('--disable-dev-shm-usage') 
+    #     options.add_argument('--disable-gpu') 
+    #     options.add_argument('--window-size=1920x1080')  
+
+    #     driver = webdriver.Chrome(service=service, options=options)
+
+    #     try:
+    #         driver.get(url)
+    #         WebDriverWait(driver, 10).until(
+    #             EC.presence_of_element_located((By.TAG_NAME, "body")) 
+    #         )
+    #         html_content = driver.page_source
+    #         return BeautifulSoup(html_content, 'html.parser')
+    #     except Exception as e:
+    #         print(f"[Error] Selenium scraping failed for {url}: {e}")
+    #         return None
+    #     finally:
+    #         driver.quit()
+
     @staticmethod
-    def scrape_with_selenium(url):
-        service = Service('/usr/bin/chromedriver')
-
-        options = webdriver.ChromeOptions()
-        options.binary_location = '/usr/bin/chromium-browser'
-        options.add_argument('--headless')  
-        options.add_argument('--no-sandbox') 
-        options.add_argument('--disable-dev-shm-usage') 
-        options.add_argument('--disable-gpu') 
-        options.add_argument('--window-size=1920x1080')  
-
-        driver = webdriver.Chrome(service=service, options=options)
+    def scrape_with_selenium(url, request):
+        is_local = request.META.get('REMOTE_ADDR') == '127.0.0.1'
 
         try:
+            if is_local:
+                service = Service(ChromeDriverManager().install())
+                options = webdriver.ChromeOptions()
+                options.add_argument('--headless')
+                driver = webdriver.Chrome(service=service, options=options)
+            else:
+                service = Service('/usr/bin/chromedriver')  
+                options = webdriver.ChromeOptions()
+                options.binary_location = '/usr/bin/chromium-browser'  
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--window-size=1920x1080')
+
+                driver = webdriver.Chrome(service=service, options=options)
+
             driver.get(url)
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body")) 
-            )
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             html_content = driver.page_source
-            return BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            job_details = JobService.extract_job_details(soup, url) 
+
+            if job_details:
+                return {"status": "success", "data": job_details} 
+            else:
+                logging.error(f"Scraping failed for {url}: No job details extracted")
+                return {"status": "error", "message": "No job details extracted from the URL"}
+
         except Exception as e:
-            print(f"[Error] Selenium scraping failed for {url}: {e}")
-            return None
+            logging.error(f"Error scraping {url}: {e}")
+            return {"status": "error", "message": str(e)}
         finally:
             driver.quit()
+
 
     @staticmethod
     async def scrape_with_puppeteer(url):
@@ -516,6 +559,43 @@ class JobService:
 
                 job_type = "Job Opportunity"
 
+            elif "pelprek.com" in url:
+                title = extract('.title_job_detaill') or "No title provided"
+                company = extract('.company-name') or "No company provided"
+                logo = extract('.company-logo img', 'src') or None
+                location = extract('.job-location') or "Unknown location"
+                posted_at = extract('.job-schedule .i-right') or "No publish date provided"
+                closing_date = extract('.closing-date .i-right') or "No closing date provided"
+                salary = extract('.job-salary') or "Negotiable"
+                description = extract('.job-desc') or "No description provided"
+                requirements = extract_list('.requirements') or ["No requirements provided"]
+                responsibilities = extract_list('.responsibilities') or ["No responsibilities provided"]
+                benefits = extract_list('.benefits') or ["No benefits provided"]
+                facebook_url = extract('a[href*="facebook.com"]', 'href') or "No Facebook URL provided"
+                category = None
+                schedule = extract('.job-schedule .i-right') or "No schedule provided"
+                job_type = "Job Opportunity"
+
+                # Extract the email from the "How to Apply" section
+                email_text = extract('.sect-part__title:contains("HOW TO APPLY") + div p')
+                email = None
+                if email_text:
+                    # Extract the email from the text, after "Email:"
+                    match = re.search(r'Email:\s*([\w\.-]+@[\w\.-]+)', email_text)
+                    if match:
+                        email = match.group(1)
+                if not email:
+                    email = "No email provided"
+
+                # Extracting phone number(s) from the page (looking for 'tel:' links)
+                phone_numbers = extract_list('a[href^="tel:"]')
+                phone = None
+                if phone_numbers:
+                    # We assume the first phone number is the main one
+                    phone = phone_numbers[0]
+                if not phone:
+                    phone = "No phone provided"
+
             else:
                 raise ValueError("Unsupported source URL")
                 
@@ -559,16 +639,16 @@ class JobService:
             print(f"[Error] Failed to save job to database: {e}")
 
     @staticmethod
-    def scrape_jobs(url):
+    async def scrape_jobs(url):
         try:
             if not JobService.is_scraping_allowed(url):
                 logging.warning(f"Scraping not allowed for {url}")
                 return None
 
-            if "jobify.works" in url or "camhr.com" in url:
+            if "jobify.works" in url or "camhr.com" in url or "pelprek.com" in url:
                 soup = JobService.scrape_with_selenium(url)
                 if not soup:
-                    raise ValueError("Failed to scrape with Selenium.")
+                    raise ValueError(f"Failed to scrape with Selenium from {url}.")
             else:
                 soup = JobService.scrape_with_beautifulsoup(url)
 

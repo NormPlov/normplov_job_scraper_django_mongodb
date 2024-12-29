@@ -10,7 +10,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "3290:8000"
     environment:
       - DEBUG=1
       - MONGO_DB_HOST=192.168.240.2
