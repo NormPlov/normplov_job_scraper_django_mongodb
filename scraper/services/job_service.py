@@ -25,7 +25,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urljoin
 from pyppeteer import launch
-from django.conf import settings
+from django.conf import global_settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -639,7 +639,7 @@ class JobService:
     def update_job(uuid, update_data, token):
         try:
             try:
-                decoded_token = jwt.decode(token.split()[1], settings.JWT_SECRET_KEY, algorithms=["HS256"])
+                decoded_token = jwt.decode(token.split()[1], global_settings.JWT_SECRET_KEY, algorithms=["HS256"])
             except jwt.ExpiredSignatureError:
                 raise ValueError("Token has expired.")
             except jwt.InvalidTokenError:
