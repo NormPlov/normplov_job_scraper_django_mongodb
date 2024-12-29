@@ -32,6 +32,9 @@ DEBUG = True
 ALLOWED_HOSTS = ['136.228.158.126', 'localhost', '127.0.0.1']
 
 
+JWT_SECRET_KEY = '8d5f01d7a83a4c8abf0e3cb7fbdc8d56e4e23d063c08a3f6f0e5d3d62c12345'
+
+
 # Application definition
 
 INSTALLED_APPS = [
