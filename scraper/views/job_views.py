@@ -7,8 +7,6 @@ from ..serializers.job_serializer import JobSerializer
 from scraper.services.job_service import JobService 
 from rest_framework import status 
 from scraper.utils.response import BaseResponse
-from django.http import JsonResponse
-import asyncio
 
 
 logger = logging.getLogger(__name__)

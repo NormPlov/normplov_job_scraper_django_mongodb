@@ -641,12 +641,12 @@ class JobService:
             try:
                 decoded_token = jwt.decode(token.split()[1], global_settings.JWT_SECRET_KEY, algorithms=["HS256"])
             except jwt.ExpiredSignatureError:
-                raise ValueError("Token has expired.")
-            except jwt.InvalidTokenError:
-                raise ValueError("Invalid token.")
+                print("Token has expired.")
+            except jwt.InvalidTokenError as e:
+                print(f"Invalid token: {str(e)}")
 
+            # Update job
             job = Job.objects.get(uuid=uuid)
-
             for field, value in update_data.items():
                 if hasattr(job, field):
                     setattr(job, field, value)
@@ -654,31 +654,30 @@ class JobService:
             job.is_updated = True
             job.save()
 
+            # Prepare data to send to FastAPI
             data = {
                 "uuid": str(job.uuid),
-                "title": getattr(job, "title", ""),
-                "company": getattr(job, "company", ""),
-                "facebook_url": getattr(job, "facebook_url", ""),
-                "location": getattr(job, "location", ""),
+                "title": job.title,
+                "company": job.company,
+                "location": job.location,
                 "posted_at": job.posted_at.isoformat() if job.posted_at else None,
-                "description": getattr(job, "description", ""),
-                "category": getattr(job, "category", ""),
-                "job_type": getattr(job, "job_type", ""),
-                "schedule": getattr(job, "schedule", ""),
-                "salary": getattr(job, "salary", ""),
+                "description": job.description,
+                "category": job.category,
+                "job_type": job.job_type,
+                "salary": job.salary,
                 "closing_date": job.closing_date.isoformat() if job.closing_date else None,
-                "requirements": ",".join(getattr(job, "requirements", [])),
-                "responsibilities": ",".join(getattr(job, "responsibilities", [])),
-                "benefits": ",".join(getattr(job, "benefits", [])),
-                "email": getattr(job, "email", ""),
-                "phone": ",".join(getattr(job, "phone", [])),
-                "website": getattr(job, "website", ""),
-                "is_active": getattr(job, "is_active", True),
-                "is_scraped": getattr(job, "is_scraped", True),
+                "requirements": ",".join(job.requirements),
+                "responsibilities": ",".join(job.responsibilities),
+                "benefits": ",".join(job.benefits),
+                "email": job.email,
+                "phone": ",".join(job.phone),
+                "website": job.website,
+                "is_active": job.is_active,
+                "is_scraped": job.is_scraped,
             }
 
+            # Send to FastAPI
             headers = {"Authorization": token}
-
             files = {}
             if job.logo:
                 try:
@@ -697,10 +696,9 @@ class JobService:
 
         except Job.DoesNotExist:
             raise ValueError(f"Job with UUID {uuid} does not exist.")
-
         except Exception as e:
-            raise Exception(f"Error updating job: {e}")
-        
+            raise Exception(f"Error updating job: {str(e)}")
+
 
     @staticmethod
     def get_jobs(filters, sort_by="-posted_at", page=1, page_size=10):
