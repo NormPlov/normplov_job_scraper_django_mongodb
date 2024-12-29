@@ -61,3 +61,4 @@ blinker==1.9.0
 selenium==4.27.1
 webdriver-manager==4.0.2
 pyppeteer==2.0.0
+PyJWT==2.10.1

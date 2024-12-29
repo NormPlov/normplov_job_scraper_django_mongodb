@@ -6,6 +6,7 @@ import requests
 import re
 import time
 import logging
+import jwt
 
 from bs4 import BeautifulSoup
 from scraper.models.job import Job
@@ -24,7 +25,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urljoin
 from pyppeteer import launch
-from django.core.exceptions import ValidationError
+from django.conf import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,33 +78,6 @@ class JobService:
                 print(f"[Retry {attempt + 1}] Error fetching {url}: {e}")
         return None  
 
-
-    # @staticmethod
-    # def scrape_with_selenium(url):
-    #     service = Service('/usr/bin/chromedriver')
-
-    #     options = webdriver.ChromeOptions()
-    #     options.binary_location = '/usr/bin/chromium-browser'
-    #     options.add_argument('--headless')  
-    #     options.add_argument('--no-sandbox') 
-    #     options.add_argument('--disable-dev-shm-usage') 
-    #     options.add_argument('--disable-gpu') 
-    #     options.add_argument('--window-size=1920x1080')  
-
-    #     driver = webdriver.Chrome(service=service, options=options)
-
-    #     try:
-    #         driver.get(url)
-    #         WebDriverWait(driver, 10).until(
-    #             EC.presence_of_element_located((By.TAG_NAME, "body")) 
-    #         )
-    #         html_content = driver.page_source
-    #         return BeautifulSoup(html_content, 'html.parser')
-    #     except Exception as e:
-    #         print(f"[Error] Selenium scraping failed for {url}: {e}")
-    #         return None
-    #     finally:
-    #         driver.quit()
 
     @staticmethod
     def scrape_with_selenium(url, request):
@@ -664,6 +638,13 @@ class JobService:
     @staticmethod
     def update_job(uuid, update_data, token):
         try:
+            try:
+                decoded_token = jwt.decode(token.split()[1], settings.JWT_SECRET_KEY, algorithms=["HS256"])
+            except jwt.ExpiredSignatureError:
+                raise ValueError("Token has expired.")
+            except jwt.InvalidTokenError:
+                raise ValueError("Invalid token.")
+
             job = Job.objects.get(uuid=uuid)
 
             for field, value in update_data.items():
@@ -696,7 +677,7 @@ class JobService:
                 "is_scraped": getattr(job, "is_scraped", True),
             }
 
-            headers = {"Authorization": token}  
+            headers = {"Authorization": token}
 
             files = {}
             if job.logo:
@@ -720,6 +701,7 @@ class JobService:
         except Exception as e:
             raise Exception(f"Error updating job: {e}")
         
+
     @staticmethod
     def get_jobs(filters, sort_by="-posted_at", page=1, page_size=10):
         query = Q()

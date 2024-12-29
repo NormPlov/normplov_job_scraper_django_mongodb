@@ -125,7 +125,7 @@ class JobScrapeView(APIView):
 class UpdateJobView(APIView):
     def patch(self, request, uuid):
         update_data = request.data
-        token = request.headers.get("Authorization") 
+        token = request.headers.get("Authorization")
 
         if not token:
             return BaseResponse(
