@@ -650,6 +650,10 @@ class JobService:
                 print(f"Invalid token: {str(e)}")
 
             job = Job.objects.get(uuid=uuid)
+
+            if job.is_updated:
+                raise ValueError(f"Job with UUID {uuid} has already been updated and cannot be modified again.")
+
             for field, value in update_data.items():
                 if hasattr(job, field):
                     setattr(job, field, value)
@@ -668,21 +672,27 @@ class JobService:
                 "job_type": job.job_type,
                 "salary": job.salary,
                 "closing_date": job.closing_date.isoformat() if job.closing_date else None,
-                "requirements": ",".join(job.requirements),
-                "responsibilities": ",".join(job.responsibilities),
-                "benefits": ",".join(job.benefits),
+                "requirements": ",".join(job.requirements) if job.requirements else None,
+                "responsibilities": ",".join(job.responsibilities) if job.responsibilities else None,
+                "benefits": ",".join(job.benefits) if job.benefits else None,
                 "email": job.email,
                 "phone": ",".join(job.phone),
                 "website": job.website,
-                "logo": job.logo,  
-                "is_active": job.is_active,
-                "is_scraped": job.is_scraped,
+                "logo": job.logo,  # Assuming logo is a string (e.g., URL)
+                "is_active": str(job.is_active).lower(),  # Convert bool to string for form-data
             }
 
-            # Send the data to FastAPI
             headers = {"Authorization": token}
             fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
-            response = requests.post(fastapi_url, json=data, headers=headers)  # Use json parameter
+
+            # Send the request to FastAPI as form-data
+            try:
+                response = requests.post(fastapi_url, data=data, headers=headers)  
+                print(f"FastAPI Response: {response.status_code}, {response.text}")
+                response.raise_for_status()
+            except requests.RequestException as e:
+                print(f"Error occurred while sending data to FastAPI: {e}")
+                raise Exception(f"Failed to update job in FastAPI. Error: {str(e)}")
 
             if response.status_code != 201:
                 raise Exception(f"Failed to update job in FastAPI. Response: {response.text}")
@@ -693,7 +703,6 @@ class JobService:
             raise ValueError(f"Job with UUID {uuid} does not exist.")
         except Exception as e:
             raise Exception(f"Error updating job: {str(e)}")
-
 
 
     @staticmethod
