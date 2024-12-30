@@ -85,16 +85,15 @@ class JobScrapeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Call the scraping service and get the result
-            scraped_jobs = JobService.scrape_with_selenium(website_url, request)
+            # Call the synchronous scrape_jobs method
+            scraped_jobs = JobService.scrape_jobs(website_url, request)
 
-            if scraped_jobs.get('status') == 'error':
-                # If the scraping failed, return the error message
+            if not scraped_jobs:
                 return Response(
                     {
                         "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
                         "message": "An error occurred while scraping jobs",
-                        "payload": {"error": scraped_jobs.get('message')}
+                        "payload": {"error": "No jobs scraped or saved."}
                     },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
@@ -103,13 +102,14 @@ class JobScrapeView(APIView):
             return Response(
                 {
                     "status": status.HTTP_201_CREATED,
-                    "message": "Jobs scraped successfully!",
-                    "payload": {"jobs": scraped_jobs.get('data')}
+                    "message": "Jobs scraped and saved successfully!",
+                    "payload": {"jobs": scraped_jobs}
                 },
                 status=status.HTTP_201_CREATED
             )
 
         except Exception as e:
+            logger.error(f"Error scraping jobs: {e}")
             return Response(
                 {
                     "status": status.HTTP_500_INTERNAL_SERVER_ERROR,

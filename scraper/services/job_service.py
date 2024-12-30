@@ -7,6 +7,9 @@ import re
 import time
 import logging
 import jwt
+import logging
+
+logger = logging.getLogger(__name__)
 
 from bs4 import BeautifulSoup
 from scraper.models.job import Job
@@ -90,15 +93,14 @@ class JobService:
                 options.add_argument('--headless')
                 driver = webdriver.Chrome(service=service, options=options)
             else:
-                service = Service('/usr/bin/chromedriver')  
+                service = Service('/usr/bin/chromedriver')
                 options = webdriver.ChromeOptions()
-                options.binary_location = '/usr/bin/chromium-browser'  
+                options.binary_location = '/usr/bin/chromium-browser'
                 options.add_argument('--headless')
                 options.add_argument('--no-sandbox')
                 options.add_argument('--disable-dev-shm-usage')
                 options.add_argument('--disable-gpu')
                 options.add_argument('--window-size=1920x1080')
-
                 driver = webdriver.Chrome(service=service, options=options)
 
             driver.get(url)
@@ -106,19 +108,14 @@ class JobService:
             html_content = driver.page_source
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            job_details = JobService.extract_job_details(soup, url) 
-
-            if job_details:
-                return {"status": "success", "data": job_details} 
-            else:
-                logging.error(f"Scraping failed for {url}: No job details extracted")
-                return {"status": "error", "message": "No job details extracted from the URL"}
+            return soup  # Return the BeautifulSoup object
 
         except Exception as e:
             logging.error(f"Error scraping {url}: {e}")
-            return {"status": "error", "message": str(e)}
+            raise
         finally:
             driver.quit()
+
 
 
     @staticmethod
@@ -561,11 +558,9 @@ class JobService:
                 if not email:
                     email = "No email provided"
 
-                # Extracting phone number(s) from the page (looking for 'tel:' links)
                 phone_numbers = extract_list('a[href^="tel:"]')
                 phone = None
                 if phone_numbers:
-                    # We assume the first phone number is the main one
                     phone = phone_numbers[0]
                 if not phone:
                     phone = "No phone provided"
@@ -603,35 +598,44 @@ class JobService:
             print(f"[Error] Failed to extract job details from {url}: {e}")
             raise ValueError(f"An error occurred while extracting job details: {e}")
 
+
     @staticmethod
     def save_to_db(job_data):
         try:
+            logger.debug(f"Job data to save: {job_data}")
             job = Job(**job_data)
             job.save()
-            print(f"Job saved to database: {job.uuid}")
+            logger.debug(f"Job saved to database: {job.uuid}")
         except Exception as e:
-            print(f"[Error] Failed to save job to database: {e}")
+            logger.error(f"[Error] Failed to save job to database: {e}")
+            logger.exception("Database save error")
+
 
     @staticmethod
-    async def scrape_jobs(url):
+    def scrape_jobs(url, request):
         try:
             if not JobService.is_scraping_allowed(url):
-                logging.warning(f"Scraping not allowed for {url}")
                 return None
 
             if "jobify.works" in url or "camhr.com" in url or "pelprek.com" in url:
-                soup = JobService.scrape_with_selenium(url)
-                if not soup:
-                    raise ValueError(f"Failed to scrape with Selenium from {url}.")
+                soup = JobService.scrape_with_selenium(url, request) 
             else:
                 soup = JobService.scrape_with_beautifulsoup(url)
 
+            if not soup:
+                raise ValueError("Failed to fetch the page content.")
+
+            # Extract job details from the scraped content
             job_data = JobService.extract_job_details(soup, url)
-            JobService.save_to_db(job_data)
+
+            if job_data:
+                JobService.save_to_db(job_data)
+            else:
+                logger.error(f"No job data extracted for {url}")
+
             return job_data
 
         except Exception as e:
-            logging.error(f"Failed to scrape jobs from {url}: {e}")
             raise
 
 
@@ -640,13 +644,11 @@ class JobService:
         try:
             try:
                 decoded_token = jwt.decode(token.split()[1], settings.JWT_SECRET_KEY, algorithms=["HS256"])
-                # print("Decoded token:", decoded_token)
             except jwt.ExpiredSignatureError:
                 print("Token has expired.")
             except jwt.InvalidTokenError as e:
                 print(f"Invalid token: {str(e)}")
 
-            # Update job
             job = Job.objects.get(uuid=uuid)
             for field, value in update_data.items():
                 if hasattr(job, field):
@@ -655,7 +657,6 @@ class JobService:
             job.is_updated = True
             job.save()
 
-            # Prepare data to send to FastAPI
             data = {
                 "uuid": str(job.uuid),
                 "title": job.title,
