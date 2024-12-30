@@ -674,22 +674,15 @@ class JobService:
                 "email": job.email,
                 "phone": ",".join(job.phone),
                 "website": job.website,
+                "logo": job.logo,  
                 "is_active": job.is_active,
                 "is_scraped": job.is_scraped,
             }
 
-            # Send to FastAPI
+            # Send the data to FastAPI
             headers = {"Authorization": token}
-            files = {}
-            if job.logo:
-                try:
-                    logo_content = requests.get(job.logo, timeout=10).content
-                    files["logo"] = ("logo.png", logo_content)
-                except requests.RequestException as e:
-                    raise Exception(f"Error fetching logo: {e}")
-
             fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
-            response = requests.post(fastapi_url, data=data, files=files, headers=headers)
+            response = requests.post(fastapi_url, json=data, headers=headers)  # Use json parameter
 
             if response.status_code != 201:
                 raise Exception(f"Failed to update job in FastAPI. Response: {response.text}")
@@ -700,6 +693,7 @@ class JobService:
             raise ValueError(f"Job with UUID {uuid} does not exist.")
         except Exception as e:
             raise Exception(f"Error updating job: {str(e)}")
+
 
 
     @staticmethod
