@@ -678,8 +678,8 @@ class JobService:
                 "email": job.email,
                 "phone": ",".join(job.phone),
                 "website": job.website,
-                "logo": job.logo,  # Assuming logo is a string (e.g., URL)
-                "is_active": str(job.is_active).lower(),  # Convert bool to string for form-data
+                "logo": job.logo, 
+                "is_active": str(job.is_active).lower(),  
             }
 
             headers = {"Authorization": token}
