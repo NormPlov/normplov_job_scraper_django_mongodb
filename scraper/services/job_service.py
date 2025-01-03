@@ -625,7 +625,6 @@ class JobService:
             if not soup:
                 raise ValueError("Failed to fetch the page content.")
 
-            # Extract job details from the scraped content
             job_data = JobService.extract_job_details(soup, url)
 
             if job_data:
@@ -672,9 +671,9 @@ class JobService:
                 "job_type": job.job_type,
                 "salary": job.salary,
                 "closing_date": job.closing_date.isoformat() if job.closing_date else None,
-                "requirements": ",".join(job.requirements) if job.requirements else None,
-                "responsibilities": ",".join(job.responsibilities) if job.responsibilities else None,
-                "benefits": ",".join(job.benefits) if job.benefits else None,
+                "requirements": job.requirements, 
+                "responsibilities": job.responsibilities,  
+                "benefits": job.benefits,
                 "email": job.email,
                 "phone": ",".join(job.phone),
                 "website": job.website,
@@ -685,9 +684,8 @@ class JobService:
             headers = {"Authorization": token}
             fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
 
-            # Send the request to FastAPI as form-data
             try:
-                response = requests.post(fastapi_url, data=data, headers=headers)  
+                response = requests.post(fastapi_url, json=data, headers=headers)  # Changed `data` to `json`
                 print(f"FastAPI Response: {response.status_code}, {response.text}")
                 response.raise_for_status()
             except requests.RequestException as e:
@@ -696,6 +694,7 @@ class JobService:
 
             if response.status_code != 201:
                 raise Exception(f"Failed to update job in FastAPI. Response: {response.text}")
+
 
             return job
 
