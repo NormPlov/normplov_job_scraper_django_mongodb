@@ -676,7 +676,7 @@ class JobService:
                 "responsibilities": list(set(job.responsibilities)) if job.responsibilities else None, 
                 "benefits": list(set(job.benefits)) if job.benefits else None,
                 "email": job.email,
-                "phone": ", ".join(job.phone) if isinstance(job.phone, list) else job.phone,
+                "phone": job.phone if isinstance(job.phone, list) else [job.phone], 
                 "website": job.website,
                 "logo": job.logo, 
                 "is_active": str(job.is_active).lower(),  
