@@ -672,11 +672,11 @@ class JobService:
                 "job_type": job.job_type,
                 "salary": job.salary,
                 "closing_date": job.closing_date.isoformat() if job.closing_date else None,
-                "requirements": ",".join(job.requirements) if job.requirements else None,
-                "responsibilities": ",".join(job.responsibilities) if job.responsibilities else None,
-                "benefits": ",".join(job.benefits) if job.benefits else None,
+                "requirements": list(set(job.requirements)) if job.requirements else None,  
+                "responsibilities": list(set(job.responsibilities)) if job.responsibilities else None, 
+                "benefits": list(set(job.benefits)) if job.benefits else None,
                 "email": job.email,
-                "phone": ",".join(job.phone),
+                "phone": ", ".join(job.phone) if isinstance(job.phone, list) else job.phone,
                 "website": job.website,
                 "logo": job.logo, 
                 "is_active": str(job.is_active).lower(),  
@@ -687,7 +687,8 @@ class JobService:
 
             # Send the request to FastAPI as form-data
             try:
-                response = requests.post(fastapi_url, data=data, headers=headers)  
+                response = requests.post(fastapi_url, json=data, headers=headers)
+
                 print(f"FastAPI Response: {response.status_code}, {response.text}")
                 response.raise_for_status()
             except requests.RequestException as e:

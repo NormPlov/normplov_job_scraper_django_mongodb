@@ -147,7 +147,7 @@ class UpdateJobView(APIView):
         except ValueError as e:
             return BaseResponse(
                 status=status.HTTP_404_NOT_FOUND,
-                message="Job not found",
+                message="Job not found or token expired.",
                 payload={"error": str(e)}
             )
 
