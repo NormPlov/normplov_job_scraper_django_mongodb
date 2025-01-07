@@ -9,7 +9,7 @@ class Job(Document):
     uuid = StringField(unique=True, required=True)
     title = StringField(required=True) 
     company = StringField(required=True) 
-    logo = URLField(required=False)  
+    logo = StringField(required=False)  
     facebook_url = URLField(required=False) 
     location = StringField(required=False)  
     posted_at = DateTimeField(required=False) 
