@@ -29,6 +29,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urljoin
 from pyppeteer import launch
 from django.conf import settings
+from scraper.utils.field_validation import parse_date, prepare_list_field
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -602,13 +603,42 @@ class JobService:
     @staticmethod
     def save_to_db(job_data):
         try:
+            # Check if the job source is CamHR and handle parsing for dates and fields
+            if "camhr.com" in job_data.get("website", ""):
+                if "posted_at" in job_data:
+                    try:
+                        job_data["posted_at"] = parse_date(
+                            job_data["posted_at"].replace("Publish Date：", "").strip()
+                        )
+                    except ValueError as e:
+                        logger.error(f"Error parsing 'posted_at' for CamHR: {e}")
+                        job_data["posted_at"] = None  # Default to None if parsing fails
+
+                if "closing_date" in job_data:
+                    try:
+                        job_data["closing_date"] = parse_date(
+                            job_data["closing_date"].replace("Closing Date：", "").strip()
+                        )
+                    except ValueError as e:
+                        logger.error(f"Error parsing 'closing_date' for CamHR: {e}")
+                        job_data["closing_date"] = None  # Default to None if parsing fails
+
+                # Ensure `requirements` and `responsibilities` are lists
+                job_data["requirements"] = prepare_list_field(job_data.get("requirements"))
+                job_data["responsibilities"] = prepare_list_field(job_data.get("responsibilities"))
+
+            # Log the job data before saving
             logger.debug(f"Job data to save: {job_data}")
+
+            # Save the job to the database
             job = Job(**job_data)
             job.save()
             logger.debug(f"Job saved to database: {job.uuid}")
+
         except Exception as e:
             logger.error(f"[Error] Failed to save job to database: {e}")
             logger.exception("Database save error")
+
 
 
     @staticmethod
