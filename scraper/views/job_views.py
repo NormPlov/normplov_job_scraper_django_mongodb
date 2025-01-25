@@ -73,9 +73,12 @@ class JobListView(APIView):
 class JobScrapeView(APIView):
     def post(self, request):
         try:
+            logger.info("Received request to scrape jobs.")
             website_url = request.data.get('url')
+            logger.debug(f"Website URL received: {website_url}")
 
             if not website_url:
+                logger.warning("Validation error: 'website_url' is missing.")
                 return Response(
                     {
                         "status": status.HTTP_400_BAD_REQUEST,
@@ -85,10 +88,13 @@ class JobScrapeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Call the synchronous scrape_jobs method
+            logger.info(f"Scraping jobs for URL: {website_url}")
             scraped_jobs = JobService.scrape_jobs(website_url, request)
+            logger.debug(f"Scraped jobs: {scraped_jobs}")
 
             if not scraped_jobs:
+                logger.error(f"No jobs scraped for URL: {website_url}")
+
                 return Response(
                     {
                         "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -98,7 +104,8 @@ class JobScrapeView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
-            # If successful, return the scraped data
+
+            logger.info("Jobs scraped successfully, returning response.")
             return Response(
                 {
                     "status": status.HTTP_201_CREATED,
@@ -109,7 +116,7 @@ class JobScrapeView(APIView):
             )
 
         except Exception as e:
-            logger.error(f"Error scraping jobs: {e}")
+            logger.error(f"Error scraping jobs: {e}", exc_info=True)
             return Response(
                 {
                     "status": status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -8,6 +8,7 @@ import time
 import logging
 import jwt
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ from urllib.parse import urljoin
 from pyppeteer import launch
 from django.conf import settings
 from scraper.utils.field_validation import parse_date, prepare_list_field
+from scraper.exceptions.scraping_exceptions import ScrapingNotAllowedError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +62,23 @@ class JobService:
         except Exception as e:
             print(f"[Warning] Failed to read robots.txt for {url}: {e}")
             return True
+
+
+    @staticmethod
+    async def scrape_with_puppeteer(url):
+        try:
+            from pyppeteer import launch
+
+            browser = await launch(headless=True)
+            page = await browser.newPage()
+            await page.goto(url, {'waitUntil': 'networkidle2'})
+            content = await page.content()
+            await browser.close()
+            return BeautifulSoup(content, 'html.parser')
+
+        except Exception as e:
+            logger.error(f"Puppeteer scraping failed for {url}: {e}", exc_info=True)
+            return None
 
 
     @staticmethod
@@ -104,15 +123,30 @@ class JobService:
                 options.add_argument('--window-size=1920x1080')
                 driver = webdriver.Chrome(service=service, options=options)
 
-            driver.get(url)
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            html_content = driver.page_source
-            soup = BeautifulSoup(html_content, 'html.parser')
+            MAX_RETRIES = 3
+            for attempt in range(MAX_RETRIES):
+                try:
+                    driver.get(url)
+                    WebDriverWait(driver, 150).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "body"))
+                    )
+                    html_content = driver.page_source
+                    logging.debug(f"Fetched HTML content (Attempt {attempt + 1}) for {url}:\n{html_content[:1000]}")
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    print(soup.prettify()[:1000])
+                    return soup
+                except Exception as retry_error:
+                    logging.error(f"Attempt {attempt + 1} failed for {url}: {retry_error}")
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(2)
+                    else:
+                        raise
 
-            return soup  # Return the BeautifulSoup object
-
+        except ValueError as ve:
+            logging.error(f"ValueError in scrape_jobs for {url}: {ve}", exc_info=True)
+            raise
         except Exception as e:
-            logging.error(f"Error scraping {url}: {e}")
+            logging.error(f"Unexpected error in scrape_jobs for {url}: {e}", exc_info=True)
             raise
         finally:
             driver.quit()
@@ -171,9 +205,9 @@ class JobService:
                     for a in soup.select('a[href^="tel:"]') if a.get('href')
                 ]
 
-            elif "nea.gov.kh" in url:  
-                title = extract('#vacancyTitle') or "No title provided"
-                company = extract('.title_box strong') or "No company provided"
+            elif "https://nea.gov.kh" in url:  
+                title = extract('div.cont:contains("មុខរបរ") span.con') or "No title provided"
+                company = extract('div.title_box div.tit_box strong.title') or "No company provided"
                 logo_raw = extract('.img_box img', 'src')
                 if logo_raw:
                     logo = urljoin(url, logo_raw)
@@ -193,16 +227,18 @@ class JobService:
                 if not facebook_url:
                     facebook_url = "No Facebook URL provided"
 
-                location_raw = extract('div.view_form:contains("ទីកន្លែងធ្វើការ") p.cont_box') or None
+                location_raw = extract('div.cont:contains("អាសយដ្ឋាន") span.con') or None
                 if location_raw:
                     try:
+                        # Clean the location text to remove extra spaces or unwanted characters
                         location_cleaned = re.sub(r'\s+', ' ', location_raw.replace('\xa0', ' ').strip())
-                        location_match = re.search(r'/\s*(.+)', location_cleaned)
-                        location = location_match.group(1).strip() if location_match else "Unknown location"
+                        location = location_cleaned if location_cleaned else "Unknown location"
                     except Exception as e:
+                        logging.error(f"Error processing location: {e}")
                         location = "Unknown location"
                 else:
                     location = "Unknown location"
+
 
 
                 posted_at = datetime.now()
@@ -364,11 +400,50 @@ class JobService:
                 if age:
                     requirements.append(age)
 
-                responsibilities_raw = extract('.job-desc .job-news-body')
-                responsibilities = (
-                    responsibilities_raw.split("\n") if responsibilities_raw else ["No responsibilities provided"]
-                )
-                benefits = extract_list('.job-detail-left .part1 h5 span') or ["No benefits specified"]
+                # Extract Responsibilities and Benefits
+                responsibilities = []
+                benefits = []
+
+                description_container = soup.select_one('.job-desc .job-news-body')
+                if description_container:
+                    # Get the text content and split it into lines
+                    lines = description_container.get_text("\n").splitlines()
+                    is_responsibility = False
+                    is_benefit = False
+
+                    for line in lines:
+                        line = line.strip("•").strip()  # Clean bullet points and extra spaces
+                        if not line:
+                            continue
+
+                        # Detect the start of responsibilities (case-insensitive)
+                        if re.search(r'\b(responsibilities|Responsibility|description|Description)\b', line, re.IGNORECASE):
+                            is_responsibility = True
+                            is_benefit = False
+                            continue
+
+                        # Detect the start of benefits (case-insensitive)
+                        if re.search(r'\b(benefits|Benefits|compensation|Compensation)\b', line, re.IGNORECASE):
+                            is_benefit = True
+                            is_responsibility = False
+                            continue
+
+                        # Detect the end of sections (e.g., a new section starts or blank line)
+                        if line.endswith(":") or re.search(r'\b(how to apply|requirements|qualifications|salary|ideal candidate)\b', line, re.IGNORECASE):
+                            is_responsibility = False
+                            is_benefit = False
+                            continue
+
+                        # Append lines to the appropriate list
+                        if is_responsibility:
+                            responsibilities.append(line)
+                        elif is_benefit:
+                            benefits.append(line)
+
+                # Provide default values if no data is extracted
+                responsibilities = responsibilities or ["No responsibilities provided"]
+                benefits = benefits or ["No benefits provided"]
+
                 
                 email = extract('a[href^="mailto:"]', 'href')
                 email = email.split(':')[1] if email else None
@@ -382,7 +457,7 @@ class JobService:
                 title = soup.select_one('h3.job-title')
                 title = title.get_text(strip=True) if title else "No title provided"
 
-                company = "Unknown Company"
+                company = "Jobify"
 
                 logo = soup.select_one('.job-top-part__container .v-image__image')
                 if logo and 'background-image:' in logo.get('style', ''):
@@ -462,16 +537,22 @@ class JobService:
                 if not responsibilities:
                     responsibilities = ["No responsibilities provided"]
 
-                description_section = soup.find('h5', string=lambda text: text and "Job Description" in text)
                 description = "No description provided"
+
+                description_section = soup.find(string=lambda text: text and re.search(r'\b(job description|ការពិពណ៌នាការងារ)\b', text, re.IGNORECASE))
+
                 if description_section:
                     description_div = description_section.find_next('div', class_='text-dark')
                     if description_div:
-                        nested_div = description_div.find('div', recursive=False)
-                        if nested_div:
-                            paragraph = nested_div.find('p', recursive=True)
-                            if paragraph:
-                                description = paragraph.get_text(strip=True)
+                        ul = description_div.find('ul')  
+                        if ul:
+                            description = "\n".join([li.get_text(strip=True).replace('\xa0', ' ') for li in ul.find_all('li')])
+                        else:
+                            description = "\n".join([line.strip() for line in description_div.stripped_strings])
+
+                if not description or description == "No description provided":
+                    description = ["No description provided"]
+
 
                 benefits_section = soup.find('h5', string=lambda text: text and "Employee Benefit" in text)
                 benefits = []
@@ -505,15 +586,46 @@ class JobService:
                 salary = extract('.salary-fs-28') or "Negotiable"
 
                 description = extract('.descript-list') or "No description provided"
-                requirements = extract('.fs-14.descript-list') or "No requirements provided"
 
                 email = extract('a[href^="mailto:"]', 'href')
                 email = email.split(':')[1] if email else None
                 phone = [a['href'].replace('tel:', '').strip() for a in soup.select('a[href^="tel:"]') if a.get('href')]
 
-                responsibilities = extract('.fs-14.descript-list') or ["No responsibilities provided"]
+                responsibilities = []
+                requirements = []
+                benefits = []
 
-                benefits = extract_list('.form-wrap .view-box .cont-box') or ["No benefits provided"]
+                description_sections = soup.select('.job-descript .fs-14.descript-list')
+
+                for section in description_sections:
+                    # Extract the section title
+                    section_title = section.find_previous('span', class_='descript-title')
+                    if section_title:
+                        title_text = section_title.get_text(strip=True).lower()
+
+                        # Match Responsibilities Section
+                        if re.search(r'(responsibilities|responsibility|ទំនួលខុសត្រូវ|description)', title_text, re.IGNORECASE):
+                            responsibilities.extend(
+                                [line.strip("•").strip() for line in section.get_text("\n").splitlines() if line.strip()]
+                            )
+
+                        # Match Requirements Section
+                        elif re.search(r'(requirements|requirement|លក្ខខណ្ឌការងារ)', title_text, re.IGNORECASE):
+                            requirements.extend(
+                                [line.strip("•").strip() for line in section.get_text("\n").splitlines() if line.strip()]
+                            )
+
+                        # Match Benefits Section
+                        elif re.search(r'(benefits|compensation|អត្ថប្រយោជន៍)', title_text, re.IGNORECASE):
+                            benefits.extend(
+                                [line.strip("•").strip() for line in section.get_text("\n").splitlines() if line.strip()]
+                            )
+
+                # Fallback to default values if no data is extracted
+                responsibilities = responsibilities or ["No responsibilities provided"]
+                requirements = requirements or ["No requirements provided"]
+                benefits = benefits or ["No benefits provided"]
+
 
                 facebook_url = extract('a[href*="facebook.com"]', 'href') or "No Facebook URL provided"
 
@@ -565,6 +677,37 @@ class JobService:
                     phone = phone_numbers[0]
                 if not phone:
                     phone = "No phone provided"
+
+            elif "https://www.linkedin.com" in url:
+                # Extract job details using Selenium and the provided HTML structure
+                title = extract('.job-details-jobs-unified-top-card__job-title h1') or "No title provided"
+                company = extract('.job-details-jobs-unified-top-card__company-name') or "No company provided"
+                logo = extract('img.evi-image.lazy-image', 'src') or None
+                location = extract('.job-details-jobs-unified-top-card__primary-description-container .t-black--light span') or "Unknown location"
+                posted_at = extract('.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(3)') or "No publish date provided"
+                closing_date = None  # LinkedIn does not typically show a closing date
+                salary = extract('.jobs-description__content span:contains("salary")') or "Negotiable"  # This field may not be available
+                description = extract('.jobs-description__content') or "No description provided"
+                requirements = extract_list('.jobs-description__content ul li') or ["No requirements provided"]
+                responsibilities = extract_list('.jobs-description__content ul li') or ["No responsibilities provided"]
+                benefits = None  # LinkedIn does not typically provide explicit benefits information
+                facebook_url = None  # LinkedIn does not provide Facebook URLs
+                category = extract('.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(2)') or None
+                schedule = extract('.job-details-preferences-and-skills__pill span:contains("On-site")') or "No schedule provided"
+                job_type = extract('.job-details-preferences-and-skills__pill span:contains("Full-time")') or "Job Opportunity"
+
+                # Extract email if mentioned in the job description
+                email_text = extract('.jobs-description__content')
+                email = None
+                if email_text:
+                    match = re.search(r'[\w\.-]+@[\w\.-]+', email_text)
+                    if match:
+                        email = match.group(0)
+                if not email:
+                    email = "No email provided"
+
+                # Phone number extraction (unlikely for LinkedIn)
+                phone = "No phone provided"
 
             else:
                 raise ValueError("Unsupported source URL")
@@ -640,20 +783,38 @@ class JobService:
             logger.exception("Database save error")
 
 
-
     @staticmethod
     def scrape_jobs(url, request):
         try:
+            # Check if scraping is allowed
             if not JobService.is_scraping_allowed(url):
-                return None
+                raise ScrapingNotAllowedError(
+                    f"Scraping is not permitted for the URL {url} based on its robots.txt policy."
+                )
 
-            if "jobify.works" in url or "camhr.com" in url or "pelprek.com" in url:
-                soup = JobService.scrape_with_selenium(url, request) 
-            else:
-                soup = JobService.scrape_with_beautifulsoup(url)
+            # Use Selenium for supported sites
+            try:
+                if "jobify.works" in url or "camhr.com" in url or "pelprek.com" in url or "https://nea.gov.kh" in url or "https://www.linkedin.com" in url:
+                    logger.info(f"Using Selenium to scrape URL: {url}")
+                    soup = JobService.scrape_with_selenium(url, request)
+                else:
+                    soup = JobService.scrape_with_beautifulsoup(url)
 
-            if not soup:
-                raise ValueError("Failed to fetch the page content.")
+                if not soup:
+                    raise ValueError("Failed to fetch the page content using Selenium or BeautifulSoup.")
+
+            except Exception as selenium_error:
+                logger.error(f"Selenium failed for URL {url}. Switching to Puppeteer. Error: {selenium_error}")
+
+                # Use Puppeteer as a fallback
+                try:
+                    logger.info(f"Using Puppeteer to scrape URL: {url}")
+                    soup = asyncio.run(JobService.scrape_with_puppeteer(url))
+                    if not soup:
+                        raise ValueError("Failed to fetch the page content using Puppeteer.")
+                except Exception as puppeteer_error:
+                    logger.error(f"Puppeteer also failed for URL {url}. Error: {puppeteer_error}")
+                    raise ValueError(f"Both Selenium and Puppeteer failed for URL {url}.") from puppeteer_error
 
             # Extract job details from the scraped content
             job_data = JobService.extract_job_details(soup, url)
@@ -665,8 +826,14 @@ class JobService:
 
             return job_data
 
-        except Exception as e:
+        except ScrapingNotAllowedError as not_allowed_error:
+            logger.warning(f"Scraping not allowed: {not_allowed_error}")
             raise
+        except Exception as e:
+            logger.error(f"Error in scrape_jobs for URL {url}: {e}", exc_info=True)
+            raise
+
+
 
 
     @staticmethod

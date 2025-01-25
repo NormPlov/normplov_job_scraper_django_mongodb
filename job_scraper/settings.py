@@ -36,7 +36,6 @@ JWT_SECRET_KEY = '8d5f01d7a83a4c8abf0e3cb7fbdc8d56e4e23d063c08a3f6f0e5d3d62c1234
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
