@@ -834,8 +834,6 @@ class JobService:
             raise
 
 
-
-
     @staticmethod
     def update_job(uuid, update_data, token):
         try:
@@ -880,7 +878,7 @@ class JobService:
             }
 
             headers = {"Authorization": token}
-            fastapi_url = "http://136.228.158.126:3300/api/v1/jobs"
+            fastapi_url = "http://202.178.125.77:3300/api/v1/jobs"
 
             # Send the request to FastAPI as form-data
             try:
