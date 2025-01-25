@@ -878,7 +878,7 @@ class JobService:
             }
 
             headers = {"Authorization": token}
-            fastapi_url = "http://202.178.125.77:3300/api/v1/jobs"
+            fastapi_url = "https://normplov-api.istad.co/api/v1/jobs"
 
             # Send the request to FastAPI as form-data
             try:
