@@ -195,7 +195,33 @@ class JobService:
 
                 requirements = extract_list('.job-detail-req-mobile li')
                 responsibilities = extract_list('.job-detail-req li')
-                benefits = extract_list('.job-benefit li')
+                benefits = []
+
+                # Search for a section containing "Benefit" (case insensitive) or similar terms
+                benefits_section = soup.find(
+                    string=lambda text: text and re.search(r'\b(benefit:|អត្ថប្រយោជន៍)\b', text, re.IGNORECASE)
+                )
+
+                if benefits_section:
+                    # Locate the nearest container (like <div> or <ul>) with the relevant content
+                    benefits_div = benefits_section.find_next(lambda tag: tag.name in ["ul", "div"] and "list" in (tag.get("class") or ""))
+                    if benefits_div:
+                        if benefits_div.name == "ul":
+                            # Extract benefits from <ul> list
+                            benefits = [
+                                li.get_text(strip=True).replace("\xa0", " ")
+                                for li in benefits_div.find_all("li")
+                            ]
+                        elif benefits_div.name == "div":
+                            # Extract benefits from <div> (if not <ul>)
+                            benefits = [line.strip() for line in benefits_div.stripped_strings]
+
+                # Default fallback if no benefits were found
+                if not benefits:
+                    benefits = ["No benefits provided"]
+
+                # Debugging
+                print("Extracted Benefits:", benefits)
 
                 email = extract('a[href^="mailto:"]', 'href')
                 email = email.split(':')[1] if email else None
@@ -453,7 +479,7 @@ class JobService:
                     for a in soup.select('a[href^="tel:"]') if a.get('href')
                 ]
             
-            elif "https://jobify.works/jobs" in url:
+            elif "https://jobify.works" in url:
                 title = soup.select_one('h3.job-title')
                 title = title.get_text(strip=True) if title else "No title provided"
 
@@ -874,7 +900,8 @@ class JobService:
                 "phone": job.phone if isinstance(job.phone, list) else [job.phone], 
                 "website": job.website,
                 "logo": job.logo, 
-                "is_active": str(job.is_active).lower(),  
+                # "is_active": str(job.is_active).lower(),  
+                "is_active": True,
             }
 
             headers = {"Authorization": token}
