@@ -499,7 +499,7 @@ class JobService:
                 category = soup.select_one('span:contains("Category:")')
                 category = category.get_text(strip=True).split("Category:")[-1].strip() if category else "Unknown category"
 
-                job_type = "Job Opportunity"
+                job_type = "Full Time"
 
                 schedule = soup.select_one('span:contains("Job Type:")')
                 if schedule:
@@ -667,7 +667,7 @@ class JobService:
                     if schedule == "Full Time":
                         schedule = "Full-time"
 
-                job_type = "Job Opportunity"
+                job_type = "Full Time"
 
             elif "pelprek.com" in url:
                 title = extract('.title_job_detaill') or "No title provided"
@@ -684,7 +684,7 @@ class JobService:
                 facebook_url = extract('a[href*="facebook.com"]', 'href') or "No Facebook URL provided"
                 category = None
                 schedule = extract('.job-schedule .i-right') or "No schedule provided"
-                job_type = "Job Opportunity"
+                job_type = "Full Time"
 
                 # Extract the email from the "How to Apply" section
                 email_text = extract('.sect-part__title:contains("HOW TO APPLY") + div p')
@@ -929,7 +929,7 @@ class JobService:
 
 
     @staticmethod
-    def get_jobs(filters, sort_by="-posted_at", page=1, page_size=10):
+    def get_jobs(filters, sort_by="-created_at", page=1, page_size=10):  # Default to `-created_at`
         query = Q()
 
         if "title" in filters and filters["title"]:
@@ -946,13 +946,12 @@ class JobService:
         queryset = Job.objects.filter(query)
 
         if sort_by:
-            queryset = queryset.order_by(sort_by)
+            queryset = queryset.order_by(sort_by)  
 
         result = paginate_query(queryset, page, page_size)
 
         return result
 
-    
 
     @staticmethod
     def delete_job(uuid):
