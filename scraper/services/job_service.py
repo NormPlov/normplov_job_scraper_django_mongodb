@@ -938,7 +938,6 @@ class JobService:
             raise Exception(f"Error updating job: {str(e)}")
 
 
-class JobService:
     @staticmethod
     def get_jobs(sort_by="-created_at", page=1, page_size=10):  
         # No filtering logic, just fetch all jobs
