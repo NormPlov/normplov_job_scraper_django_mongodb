@@ -186,6 +186,7 @@ class JobService:
                 facebook_url = extract('a[href*="facebook.com"]', 'href')
                 location = extract('li:contains("Location") .value')
                 posted_at = datetime.now()
+                created_at = datetime.now()
                 closing_date = extract('time[datetime]') or None
                 description = extract('#announcemnt-description .ql-editor')
                 category = extract('li:contains("Category") .value')
@@ -268,6 +269,7 @@ class JobService:
 
 
                 posted_at = datetime.now()
+                created_at = datetime.now()
                 closing_date = extract('.date') or None  
                 closing_date_raw = extract('.date') or None  
                 if closing_date_raw:
@@ -378,6 +380,7 @@ class JobService:
                 
                 posted_at_raw_element = soup.select_one('.btns-left span img[src*="time_icon"]').find_next_sibling(text=True)
                 posted_at_raw = posted_at_raw_element.strip() if posted_at_raw_element else None
+                created_at = datetime.now()
 
                 if posted_at_raw:
                     try:
@@ -530,6 +533,8 @@ class JobService:
                 else:
                     posted_at = datetime.now()
 
+                created_at = datetime.now()
+
                 closing_date = soup.select_one('span:contains("Closing date:")')
                 if closing_date:
                     try:
@@ -603,6 +608,7 @@ class JobService:
                 title = extract('.job-name-span.text-break') or "No title provided"
 
                 posted_at = extract('.send-date span') or "No publish date provided"
+                created_at = datetime.now()
                 closing_date = extract('.send-date .close-date') or "No closing date provided"
 
                 company = extract('.compnay-name') or "No company provided"
@@ -675,6 +681,7 @@ class JobService:
                 logo = extract('.company-logo img', 'src') or None
                 location = extract('.job-location') or "Unknown location"
                 posted_at = extract('.job-schedule .i-right') or "No publish date provided"
+                created_at = datetime.now()
                 closing_date = extract('.closing-date .i-right') or "No closing date provided"
                 salary = extract('.job-salary') or "Negotiable"
                 description = extract('.job-desc') or "No description provided"
@@ -711,6 +718,7 @@ class JobService:
                 logo = extract('img.evi-image.lazy-image', 'src') or None
                 location = extract('.job-details-jobs-unified-top-card__primary-description-container .t-black--light span') or "Unknown location"
                 posted_at = extract('.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(3)') or "No publish date provided"
+                created_at = datetime.now()
                 closing_date = None  # LinkedIn does not typically show a closing date
                 salary = extract('.jobs-description__content span:contains("salary")') or "Negotiable"  # This field may not be available
                 description = extract('.jobs-description__content') or "No description provided"
@@ -749,6 +757,7 @@ class JobService:
                 "posted_at": posted_at,
                 "description": description,
                 "category": category,
+                "created_at": created_at,
                 "job_type": job_type,
                 "schedule": schedule,
                 "salary": salary,
@@ -888,6 +897,7 @@ class JobService:
                 "company": job.company,
                 "location": job.location,
                 "posted_at": job.posted_at.isoformat() if isinstance(job.posted_at, datetime) else job.posted_at,
+                "created_at": job.created_at.isoformat() if isinstance(job.created_at, datetime) else job.created_at,
                 "description": job.description,
                 "category": job.category,
                 "job_type": job.job_type,
@@ -928,29 +938,19 @@ class JobService:
             raise Exception(f"Error updating job: {str(e)}")
 
 
+class JobService:
     @staticmethod
-    def get_jobs(filters, sort_by="-created_at", page=1, page_size=10):  # Default to `-created_at`
-        query = Q()
-
-        if "title" in filters and filters["title"]:
-            query &= Q(title__icontains=filters["title"])
-        if "company" in filters and filters["company"]:
-            query &= Q(company__icontains=filters["company"])
-        if "location" in filters and filters["location"]:
-            query &= Q(location__icontains=filters["location"])
-        if "is_active" in filters and filters["is_active"] is not None:
-            query &= Q(is_active=filters["is_active"])
-
-        query &= Q(is_updated=False)
-
-        queryset = Job.objects.filter(query)
+    def get_jobs(sort_by="-created_at", page=1, page_size=10):  
+        # No filtering logic, just fetch all jobs
+        queryset = Job.objects.filter(is_updated=False)  
 
         if sort_by:
-            queryset = queryset.order_by(sort_by)  
+            queryset = queryset.order_by(sort_by) 
 
         result = paginate_query(queryset, page, page_size)
 
         return result
+
 
 
     @staticmethod

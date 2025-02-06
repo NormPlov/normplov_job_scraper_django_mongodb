@@ -13,6 +13,7 @@ class Job(Document):
     facebook_url = URLField(required=False) 
     location = StringField(required=False)  
     posted_at = DateTimeField(required=False) 
+    created_at = DateTimeField(required=False) 
     description = StringField(required=False) 
     category = StringField(required=False) 
     job_type = StringField(required=False)  

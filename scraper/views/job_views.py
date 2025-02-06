@@ -37,18 +37,12 @@ class JobDetailView(APIView):
 
 class JobListView(APIView):
     def get(self, request):
-        filters = {
-            "title": request.query_params.get("title"),
-            "company": request.query_params.get("company"),
-            "location": request.query_params.get("location"),
-            "is_active": request.query_params.get("is_active") == "true" if request.query_params.get("is_active") else None,
-        }
         sort_by = request.query_params.get("sort_by", "-created_at")  # Default to `-created_at`
         page = int(request.query_params.get("page", 1))
         page_size = int(request.query_params.get("page_size", 10))
 
         try:
-            result = JobService.get_jobs(filters, sort_by, page, page_size)
+            result = JobService.get_jobs(sort_by, page, page_size)  # Pass only sorting and pagination parameters
 
             serialized_jobs = JobSerializer(result["data"], many=True)
 

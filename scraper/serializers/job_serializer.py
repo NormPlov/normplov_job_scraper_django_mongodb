@@ -7,6 +7,7 @@ class JobSerializer(serializers.Serializer):
     company = serializers.CharField()
     location = serializers.CharField(required=False)
     posted_at = serializers.DateTimeField(required=False)
+    created_at = serializers.DateTimeField(required=False)
     description = serializers.CharField(required=False)
     category = serializers.CharField(required=False)
     salary = serializers.CharField(required=False)
